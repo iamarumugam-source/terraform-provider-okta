@@ -92,7 +92,7 @@ func resourcePolicyMfaRuleUpdate(ctx context.Context, d *schema.ResourceData, me
 }
 
 func resourcePolicyMfaRuleDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	err := deleteRule(ctx, d, meta, false)
+	err := deleteRule(ctx, d, meta, true)
 	if err != nil {
 		return diag.Errorf("failed to delete MFA policy rule: %v", err)
 	}
@@ -104,6 +104,9 @@ func buildMfaPolicyRule(d *schema.ResourceData) sdk.SdkPolicyRule {
 	rule := sdk.MfaPolicyRule()
 	rule.Name = d.Get("name").(string)
 	rule.Status = d.Get("status").(string)
+	if v, ok := d.GetOk("system"); ok {
+		rule.System = utils.BoolPtr(v.(bool))
+	}
 	if priority, ok := d.GetOk("priority"); ok {
 		rule.Priority = int64(priority.(int))
 	}

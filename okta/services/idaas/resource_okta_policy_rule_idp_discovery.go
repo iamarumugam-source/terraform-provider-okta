@@ -133,6 +133,7 @@ func resourcePolicyRuleIdpDiscoveryRead(ctx context.Context, d *schema.ResourceD
 	_ = d.Set("name", rule.Name)
 	_ = d.Set("status", rule.Status)
 	_ = d.Set("priority", rule.Priority)
+	_ = d.Set("system", rule.System)
 	_ = d.Set("user_identifier_attribute", rule.Conditions.UserIdentifier.Attribute)
 	_ = d.Set("user_identifier_type", rule.Conditions.UserIdentifier.Type)
 	mm := map[string]interface{}{
@@ -208,6 +209,10 @@ func resourcePolicyRuleIdpDiscoveryDelete(ctx context.Context, d *schema.Resourc
 	if policyID == "" {
 		return diag.Errorf("'policy_id' field should be set")
 	}
+	if d.Get("system").(bool) {
+		logger(meta).Info(fmt.Sprintf("IDP Discovery Policy Rule '%s' is a system rule, cannot delete from Okta", d.Get("name").(string)))
+		return nil
+	}
 	logger(meta).Info("deleting IdP discovery policy rule", "id", d.Id(), "policy_id", policyID)
 	_, err := getOktaClientFromMetadata(meta).Policy.DeletePolicyRule(ctx, policyID, d.Id())
 	if err != nil {
@@ -276,6 +281,7 @@ func buildIdpDiscoveryRule(d *schema.ResourceData) *sdk.IdpDiscoveryRule {
 		Type:   sdk.IdpDiscoveryType,
 		Name:   d.Get("name").(string),
 		Status: d.Get("status").(string),
+		System: d.Get("system").(bool),
 	}
 	if priority, ok := d.GetOk("priority"); ok {
 		rule.Priority = priority.(int)

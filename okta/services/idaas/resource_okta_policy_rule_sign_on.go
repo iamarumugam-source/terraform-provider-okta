@@ -260,6 +260,14 @@ func resourcePolicySignOnRuleUpdate(ctx context.Context, d *schema.ResourceData,
 		return diag.FromErr(err)
 	}
 	template := buildSignOnPolicyRule(d)
+	if utils.BoolFromBoolPtr(template.System) {
+		// These conditions are read-only on system (default) rules.
+		// Strip them so the PUT body matches what Okta already has.
+		if template.Conditions != nil {
+			template.Conditions.IdentityProvider = nil
+			template.Conditions.People = nil
+		}
+	}
 	err = updateRule(ctx, d, meta, template)
 	if err != nil {
 		return diag.Errorf("failed to update sign-on policy rule: %v", err)
@@ -280,6 +288,10 @@ func buildSignOnPolicyRule(d *schema.ResourceData) sdk.SdkPolicyRule {
 	template := sdk.SignOnPolicyRule()
 	template.Name = d.Get("name").(string)
 	template.Status = d.Get("status").(string)
+	if v, ok := d.GetOk("system"); ok {
+		template.System = utils.BoolPtr(v.(bool))
+	}
+
 	if priority, ok := d.GetOk("priority"); ok {
 		template.Priority = int64(priority.(int))
 	}

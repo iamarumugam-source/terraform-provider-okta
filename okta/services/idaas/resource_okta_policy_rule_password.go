@@ -6,6 +6,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/okta/terraform-provider-okta/okta/resources"
+	"github.com/okta/terraform-provider-okta/okta/utils"
 	"github.com/okta/terraform-provider-okta/sdk"
 )
 
@@ -78,7 +79,7 @@ func resourcePolicyPasswordRuleUpdate(ctx context.Context, d *schema.ResourceDat
 }
 
 func resourcePolicyPasswordRuleDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	err := deleteRule(ctx, d, meta, false)
+	err := deleteRule(ctx, d, meta, true)
 	if err != nil {
 		return diag.Errorf("failed to delete password policy rule: %v", err)
 	}
@@ -90,6 +91,9 @@ func buildPolicyRulePassword(d *schema.ResourceData) sdk.SdkPolicyRule {
 	template := sdk.PasswordPolicyRule()
 	template.Name = d.Get("name").(string)
 	template.Status = d.Get("status").(string)
+	if v, ok := d.GetOk("system"); ok {
+		template.System = utils.BoolPtr(v.(bool))
+	}
 	if priority, ok := d.GetOk("priority"); ok {
 		template.Priority = int64(priority.(int))
 	}

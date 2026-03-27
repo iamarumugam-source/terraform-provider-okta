@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/okta/terraform-provider-okta/okta/acctest"
 	"github.com/okta/terraform-provider-okta/okta/resources"
 	"github.com/okta/terraform-provider-okta/okta/services/idaas"
@@ -241,4 +242,46 @@ resource "%s" "%s" {
 	status   = "ACTIVE"
 }
 `, resources.OktaIDaaSPolicyRuleSignOn, name)
+}
+
+// TestAccResourceOktaPolicyRuleSignon_issue_2583 verifies that an existing
+// default (system) sign-on policy rule can be imported and updated without
+// being deleted. Okta does not allow system rules to be deleted; the provider
+// must remove only from state on destroy.
+func TestAccResourceOktaPolicyRuleSignon_issue_2583(t *testing.T) {
+	mgr := newFixtureManager("resources", resources.OktaIDaaSPolicyRuleSignOn, t.Name())
+	config := mgr.GetFixtures("basic_issue_2583.tf", t)
+	resourceName := "okta_policy_rule_signon.default_rule"
+
+	acctest.OktaResourceTest(t, resource.TestCase{
+		PreCheck:                 acctest.AccPreCheck(t),
+		ErrorCheck:               testAccErrorChecks(t),
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactoriesForTestAcc(t),
+		// System (default) rules cannot be deleted from Okta; use a no-op so
+		// the test does not fail when the rule still exists after cleanup.
+		CheckDestroy: func(*terraform.State) error {
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{
+				// Import the pre-existing "Default Rule" by policy/rule ID.
+				ImportState:        true,
+				ResourceName:       resourceName,
+				ImportStateId:      "00pse1f0jC1KpxXA1d7/0prse1f0jT0ZYoLBcd7",
+				ImportStatePersist: true,
+				Config:             config,
+			},
+			{
+				// Apply a config that changes access ALLOW → DENY, proving
+				// that updates go through and no DELETE is issued.
+				Config: config,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", "Default Rule"),
+					resource.TestCheckResourceAttr(resourceName, "system", "true"),
+					resource.TestCheckResourceAttr(resourceName, "status", idaas.StatusActive),
+					resource.TestCheckResourceAttr(resourceName, "access", "DENY"),
+				),
+			},
+		},
+	})
 }

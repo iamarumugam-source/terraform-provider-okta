@@ -70,6 +70,11 @@ var (
 			ConflictsWith: []string{"network_includes"},
 			Elem:          &schema.Schema{Type: schema.TypeString},
 		},
+		"system": {
+			Type:        schema.TypeBool,
+			Computed:    true,
+			Description: "Indicates if the policy rule is a system (default) rule. System rules cannot be deleted.",
+		},
 	}
 
 	appResource = &schema.Resource{
@@ -208,6 +213,7 @@ func syncRuleFromUpstream(d *schema.ResourceData, rule *sdk.SdkPolicyRule) error
 	_ = d.Set("name", rule.Name)
 	_ = d.Set("status", rule.Status)
 	_ = d.Set("priority", rule.Priority)
+	_ = d.Set("system", utils.BoolFromBoolPtr(rule.System))
 	_ = d.Set("network_connection", rule.Conditions.Network.Connection)
 	m := map[string]interface{}{
 		"users_excluded": utils.ConvertStringSliceToSetNullable(rule.Conditions.People.Users.Exclude),
@@ -228,9 +234,6 @@ func syncRuleFromUpstream(d *schema.ResourceData, rule *sdk.SdkPolicyRule) error
 
 func updateRule(ctx context.Context, d *schema.ResourceData, m interface{}, template sdk.SdkPolicyRule) error {
 	logger(m).Info("updating policy rule", "name", d.Get("name").(string))
-	if err := ensureNotDefaultRule(d); err != nil {
-		return err
-	}
 	policyID := d.Get("policy_id").(string)
 	if policyID == "" {
 		return fmt.Errorf("'policy_id' field should be set")
@@ -242,6 +245,10 @@ func updateRule(ctx context.Context, d *schema.ResourceData, m interface{}, temp
 	err = utils.ValidatePriority(template.Priority, rule.Priority)
 	if err != nil {
 		return err
+	}
+	if d.Get("system").(bool) {
+		// System (default) rules are permanently active; activation API call is not applicable.
+		return nil
 	}
 	return policyRuleActivate(ctx, d, m)
 }
@@ -270,9 +277,6 @@ func policyRuleActivate(ctx context.Context, d *schema.ResourceData, m interface
 
 func deleteRule(ctx context.Context, d *schema.ResourceData, m interface{}, checkIsSystemPolicy bool) error {
 	logger(m).Info("deleting policy rule", "name", d.Get("name").(string))
-	if err := ensureNotDefaultRule(d); err != nil {
-		return err
-	}
 	rule, err := getPolicyRule(ctx, d, m)
 	if err != nil {
 		return err
